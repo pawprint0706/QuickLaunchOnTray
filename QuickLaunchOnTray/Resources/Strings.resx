@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="ConfigFileNotFound" xml:space="preserve">
+    <value>Could not find 'config.ini' file:\n{0}</value>
+  </data>
+  <data name="ConfigFileNotFound_ko" xml:space="preserve">
+    <value>'config.ini' 파일을 찾을 수 없습니다:\n{0}</value>
+  </data>
+  <data name="NoProgramInfo" xml:space="preserve">
+    <value>There is no information about the program to run in the 'config.ini' file.</value>
+  </data>
+  <data name="NoProgramInfo_ko" xml:space="preserve">
+    <value>'config.ini' 파일에 실행할 프로그램 정보가 없습니다.</value>
+  </data>
+  <data name="OpenFolder" xml:space="preserve">
+    <value>Open folder</value>
+  </data>
+  <data name="OpenFolder_ko" xml:space="preserve">
+    <value>폴더 열기</value>
+  </data>
+  <data name="RunProgram" xml:space="preserve">
+    <value>Run this program</value>
+  </data>
+  <data name="RunProgram_ko" xml:space="preserve">
+    <value>프로그램 실행</value>
+  </data>
+  <data name="TerminateApp" xml:space="preserve">
+    <value>Terminate 'QuickLaunchOnTray'</value>
+  </data>
+  <data name="TerminateApp_ko" xml:space="preserve">
+    <value>'QuickLaunchOnTray' 종료</value>
+  </data>
+  <data name="ConfirmTermination" xml:space="preserve">
+    <value>Are you sure you want to terminate 'QuickLaunchOnTray'? All quick launch icons will disappear.</value>
+  </data>
+  <data name="ConfirmTermination_ko" xml:space="preserve">
+    <value>'QuickLaunchOnTray'를 종료하시겠습니까? 모든 빠른 실행 아이콘이 사라집니다.</value>
+  </data>
+  <data name="Confirm" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="Confirm_ko" xml:space="preserve">
+    <value>확인</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
+  </data>
+  <data name="Error_ko" xml:space="preserve">
+    <value>오류</value>
+  </data>
+  <data name="ProgramRunError" xml:space="preserve">
+    <value>Error occurred while running program: {0}</value>
+  </data>
+  <data name="ProgramRunError_ko" xml:space="preserve">
+    <value>프로그램 실행 중 오류가 발생했습니다: {0}</value>
+  </data>
+  <data name="EmptyPath" xml:space="preserve">
+    <value>Path is empty.</value>
+  </data>
+  <data name="EmptyPath_ko" xml:space="preserve">
+    <value>경로가 비어있습니다.</value>
+  </data>
+  <data name="PathNotExist" xml:space="preserve">
+    <value>Path does not exist: {0}</value>
+  </data>
+  <data name="PathNotExist_ko" xml:space="preserve">
+    <value>경로가 존재하지 않습니다: {0}</value>
+  </data>
+  <data name="ConfigReadError" xml:space="preserve">
+    <value>Error occurred while reading configuration file.</value>
+  </data>
+  <data name="ConfigReadError_ko" xml:space="preserve">
+    <value>설정 파일을 읽는 중 오류가 발생했습니다.</value>
+  </data>
+  <data name="CannotRunProgram" xml:space="preserve">
+    <value>Cannot run program: {0}</value>
+  </data>
+  <data name="CannotRunProgram_ko" xml:space="preserve">
+    <value>프로그램을 실행할 수 없습니다: {0}</value>
+  </data>
+</root> 

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Globalization;
 
 namespace QuickLaunchOnTray
 {
@@ -17,12 +18,21 @@ namespace QuickLaunchOnTray
         [STAThread]
         static void Main()
         {
-            // WinForms 초기화
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
-            // TrayApplicationContext를 생성하여 실행 (폼 없이 트레이 아이콘만 표시)
-            Application.Run(new TrayApplicationContext());
+            try
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new TrayApplicationContext());
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"프로그램 실행 중 오류가 발생했습니다: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                Environment.Exit(1);
+            }
         }
 
         // 프로그램 정보를 담는 클래스
@@ -30,6 +40,18 @@ namespace QuickLaunchOnTray
         {
             public string Name { get; set; }  // ini 파일의 key 값 또는 단순 경로인 경우 파일명(확장자 제외)
             public string Path { get; set; }  // 프로그램 경로
+        }
+
+        // 시스템 언어가 한국어인지 확인하는 메서드
+        private static bool IsKoreanSystem()
+        {
+            return CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("ko", StringComparison.OrdinalIgnoreCase);
+        }
+
+        // 언어에 따른 텍스트 반환 메서드
+        private static string GetLocalizedText(string koreanText, string englishText)
+        {
+            return IsKoreanSystem() ? koreanText : englishText;
         }
 
         /// <summary>
@@ -86,7 +108,9 @@ namespace QuickLaunchOnTray
                 string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.ini");
                 if (!File.Exists(iniPath))
                 {
-                    MessageBox.Show("Could not find 'config.ini' file:\n" + iniPath);
+                    MessageBox.Show(GetLocalizedText(
+                        "'config.ini' 파일을 찾을 수 없습니다:\n" + iniPath,
+                        "Could not find 'config.ini' file:\n" + iniPath));
                     Environment.Exit(0);
                     return;
                 }
@@ -95,7 +119,9 @@ namespace QuickLaunchOnTray
                 List<ProgramItem> programItems = LoadProgramItems(iniPath);
                 if (programItems.Count == 0)
                 {
-                    MessageBox.Show("There is no information about the program to run in the 'config.ini' file.");
+                    MessageBox.Show(GetLocalizedText(
+                        "'config.ini' 파일에 실행할 프로그램 정보가 없습니다.",
+                        "There is no information about the program to run in the 'config.ini' file."));
                     Environment.Exit(0);
                     return;
                 }
@@ -197,7 +223,9 @@ namespace QuickLaunchOnTray
                 ContextMenuStrip menu = new ContextMenuStrip();
 
                 // "Run this program" 또는 "Open folder" 메뉴 항목
-                string menuText = Directory.Exists(item.Path) ? "Open folder" : "Run this program";
+                string menuText = Directory.Exists(item.Path) 
+                    ? GetLocalizedText("폴더 열기", "Open folder")
+                    : GetLocalizedText("프로그램 실행", "Run this program");
                 ToolStripMenuItem runItem = new ToolStripMenuItem(menuText);
                 runItem.Click += (s, e) =>
                 {
@@ -213,10 +241,18 @@ namespace QuickLaunchOnTray
                 menu.Items.Add(runItem);
 
                 // "Terminate 'QuickLaunchOnTray'" 메뉴 항목
-                ToolStripMenuItem exitItem = new ToolStripMenuItem("Terminate 'QuickLaunchOnTray'");
+                ToolStripMenuItem exitItem = new ToolStripMenuItem(GetLocalizedText(
+                    "'QuickLaunchOnTray' 종료",
+                    "Terminate 'QuickLaunchOnTray'"));
                 exitItem.Click += (s, e) =>
                 {
-                    DialogResult result = MessageBox.Show("Are you sure you want to terminate 'QuickLaunchOnTray'? All quick launch icons will disappear.", "Confirm", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    DialogResult result = MessageBox.Show(
+                        GetLocalizedText(
+                            "'QuickLaunchOnTray'를 종료하시겠습니까? 모든 빠른 실행 아이콘이 사라집니다.",
+                            "Are you sure you want to terminate 'QuickLaunchOnTray'? All quick launch icons will disappear."),
+                        GetLocalizedText("확인", "Confirm"),
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
                     if (result == DialogResult.Yes)
                     {
                         ExitThread();
@@ -251,13 +287,16 @@ namespace QuickLaunchOnTray
                 {
                     ContextMenuStrip folderMenu = new ContextMenuStrip();
                     BuildFolderAndFileMenu(folderPath, folderMenu.Items);
-                    // 루트 메뉴에도 '탐색기에서 열기' 추가
+                    // 루트 메뉴에만 '탐색기에서 열기'와 '닫기' 추가
                     if (folderMenu.Items.Count > 0)
                     {
                         folderMenu.Items.Add(new ToolStripSeparator());
-                        var openInExplorer = new ToolStripMenuItem("탐색기에서 열기");
+                        var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
                         openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", folderPath); };
                         folderMenu.Items.Add(openInExplorer);
+                        var closeMenu = new ToolStripMenuItem(GetLocalizedText("닫기", "Close"));
+                        closeMenu.Click += (s, e) => { folderMenu.Close(); };
+                        folderMenu.Items.Add(closeMenu);
                     }
                     if (folderMenu.Items.Count > 0)
                     {
@@ -272,7 +311,9 @@ namespace QuickLaunchOnTray
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error showing folder menu: {ex.Message}");
+                    MessageBox.Show(GetLocalizedText(
+                        $"폴더 메뉴 표시 중 오류 발생: {ex.Message}",
+                        $"Error showing folder menu: {ex.Message}"));
                 }
             }
 
@@ -291,7 +332,7 @@ namespace QuickLaunchOnTray
                             BuildFolderAndFileMenu(subFolder, folderItem.DropDownItems);
                         }
                         // '탐색기에서 열기' 하위 메뉴 추가
-                        var openInExplorer = new ToolStripMenuItem("탐색기에서 열기");
+                        var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
                         openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", subFolder); };
                         folderItem.DropDownItems.Add(new ToolStripSeparator());
                         folderItem.DropDownItems.Add(openInExplorer);
@@ -311,7 +352,9 @@ namespace QuickLaunchOnTray
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error building folder menu: {ex.Message}");
+                    MessageBox.Show(GetLocalizedText(
+                        $"폴더 메뉴 구성 중 오류 발생: {ex.Message}",
+                        $"Error building folder menu: {ex.Message}"));
                 }
             }
 
@@ -326,7 +369,9 @@ namespace QuickLaunchOnTray
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Run this program failed:\n" + ex.Message);
+                    MessageBox.Show(GetLocalizedText(
+                        "프로그램 실행 실패:\n" + ex.Message,
+                        "Run this program failed:\n" + ex.Message));
                 }
             }
 
