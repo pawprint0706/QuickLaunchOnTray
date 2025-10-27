@@ -25,15 +25,23 @@ namespace QuickLaunchOnTray.Services
         public string GetString(string key, params object[] args)
         {
             string resourceKey = IsKoreanSystem() ? $"{key}_ko" : key;
-            var property = typeof(Strings).GetProperty(resourceKey);
-            
-            if (property == null)
+
+            // Try exact key for current locale suffix first
+            string format = Strings.ResourceManager.GetString(resourceKey, Strings.Culture);
+
+            // Fallback to base key if locale-suffixed key missing
+            if (string.IsNullOrEmpty(format))
+            {
+                format = Strings.ResourceManager.GetString(key, Strings.Culture);
+            }
+
+            // Final fallback to the key itself
+            if (string.IsNullOrEmpty(format))
             {
                 return key;
             }
 
-            string format = (string)property.GetValue(null);
-            return args.Length > 0 ? string.Format(format, args) : format;
+            return (args != null && args.Length > 0) ? string.Format(format, args) : format;
         }
     }
 } 
