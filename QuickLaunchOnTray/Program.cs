@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -7,6 +8,7 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Globalization;
+using System.Threading.Tasks;
 
 namespace QuickLaunchOnTray
 {
@@ -27,7 +29,7 @@ namespace QuickLaunchOnTray
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"프로그램 실행 중 오류가 발생했습니다: {ex.Message}",
+                    string.Format("프로그램 실행 중 오류가 발생했습니다: {0}", ex.Message),
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -79,9 +81,15 @@ namespace QuickLaunchOnTray
             }
 
             // 생성한 트레이 아이콘들을 보관할 리스트
-            private List<NotifyIcon> trayIcons = new List<NotifyIcon>();
+            private readonly List<NotifyIcon> trayIcons = new List<NotifyIcon>();
             private Icon folderIcon;
+            private Bitmap folderBitmap;
+            private Bitmap defaultFileBitmap;
             private Form hiddenForm;
+            private readonly ConcurrentDictionary<string, Bitmap> iconCache = new ConcurrentDictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
+            private readonly ConcurrentDictionary<string, FolderCacheEntry> folderCache = new ConcurrentDictionary<string, FolderCacheEntry>(StringComparer.OrdinalIgnoreCase);
+            private readonly TimeSpan cacheDuration = TimeSpan.FromSeconds(30);
+            private readonly object loadingTag = new object();
 
             public TrayApplicationContext()
             {
@@ -103,6 +111,9 @@ namespace QuickLaunchOnTray
                 {
                     folderIcon = SystemIcons.Application;
                 }
+
+                folderBitmap = folderIcon != null ? folderIcon.ToBitmap() : null;
+                defaultFileBitmap = SystemIcons.Application.ToBitmap();
 
                 // 실행 파일과 같은 폴더의 config.ini 파일 경로 지정
                 string iniPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.ini");
@@ -285,77 +296,414 @@ namespace QuickLaunchOnTray
             {
                 try
                 {
+                    if (!Directory.Exists(folderPath))
+                    {
+                        throw new DirectoryNotFoundException(folderPath);
+                    }
+
                     ContextMenuStrip folderMenu = new ContextMenuStrip();
-                    BuildFolderAndFileMenu(folderPath, folderMenu.Items);
-                    // 루트 메뉴에만 '탐색기에서 열기'와 '닫기' 추가
-                    if (folderMenu.Items.Count > 0)
-                    {
-                        folderMenu.Items.Add(new ToolStripSeparator());
-                        var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
-                        openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", folderPath); };
-                        folderMenu.Items.Add(openInExplorer);
-                        var closeMenu = new ToolStripMenuItem(GetLocalizedText("닫기", "Close"));
-                        closeMenu.Click += (s, e) => { folderMenu.Close(); };
-                        folderMenu.Items.Add(closeMenu);
-                    }
-                    if (folderMenu.Items.Count > 0)
-                    {
-                        POINT cursorPos;
-                        GetCursorPos(out cursorPos);
-                        folderMenu.Show(hiddenForm, hiddenForm.PointToClient(new Point(cursorPos.X, cursorPos.Y)));
-                    }
-                    else
-                    {
-                        Process.Start("explorer.exe", folderPath);
-                    }
+                    AddLoadingPlaceholder(folderMenu.Items);
+                    LoadFolderMenuItemsAsync(folderPath, folderMenu.Items, includeRootExtras: true, ownerMenuItem: null);
+
+                    POINT cursorPos;
+                    GetCursorPos(out cursorPos);
+                    folderMenu.Show(hiddenForm, hiddenForm.PointToClient(new Point(cursorPos.X, cursorPos.Y)));
                 }
                 catch (Exception ex)
                 {
                     MessageBox.Show(GetLocalizedText(
-                        $"폴더 메뉴 표시 중 오류 발생: {ex.Message}",
-                        $"Error showing folder menu: {ex.Message}"));
+                        "폴더 메뉴 표시 중 오류 발생: " + ex.Message,
+                        "Error showing folder menu: " + ex.Message));
                 }
             }
 
-            private void BuildFolderAndFileMenu(string folderPath, ToolStripItemCollection items)
+            private void LoadFolderMenuItemsAsync(string folderPath, ToolStripItemCollection items, bool includeRootExtras, ToolStripMenuItem ownerMenuItem)
             {
-                try
+                Task.Run(() =>
                 {
-                    // 하위 폴더
-                    string[] subFolders = Directory.GetDirectories(folderPath);
-                    foreach (string subFolder in subFolders)
+                    try
                     {
-                        string folderName = Path.GetFileName(subFolder);
-                        ToolStripMenuItem folderItem = new ToolStripMenuItem(folderName, folderIcon?.ToBitmap());
-                        if (Directory.GetDirectories(subFolder).Length > 0 || Directory.GetFiles(subFolder).Length > 0)
+                        var entries = GetFolderEntries(folderPath);
+                        if (hiddenForm == null || hiddenForm.IsDisposed)
                         {
-                            BuildFolderAndFileMenu(subFolder, folderItem.DropDownItems);
+                            return;
                         }
-                        // '탐색기에서 열기' 하위 메뉴 추가
-                        var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
-                        openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", subFolder); };
-                        folderItem.DropDownItems.Add(new ToolStripSeparator());
-                        folderItem.DropDownItems.Add(openInExplorer);
-                        items.Add(folderItem);
+
+                        hiddenForm.BeginInvoke(new Action(() =>
+                        {
+                            if ((ownerMenuItem != null && ownerMenuItem.IsDisposed) || items == null)
+                            {
+                                return;
+                            }
+
+                            ToolStripDropDown dropDown = items.Owner as ToolStripDropDown;
+                            if (dropDown != null && dropDown.IsDisposed)
+                            {
+                                return;
+                            }
+
+                            ApplyFolderEntries(folderPath, items, entries, includeRootExtras, ownerMenuItem);
+                        }));
                     }
-                    // 실행파일 및 바로가기 → 모든 파일 표시
-                    var files = Directory.GetFiles(folderPath);
-                    foreach (string file in files)
+                    catch (Exception ex)
                     {
-                        string fileName = Path.GetFileName(file);
-                        Icon fileIcon = null;
-                        try { fileIcon = Icon.ExtractAssociatedIcon(file); } catch { fileIcon = SystemIcons.Application; }
-                        ToolStripMenuItem fileItem = new ToolStripMenuItem(fileName, fileIcon?.ToBitmap());
-                        fileItem.Click += (s, e) => { RunProgram(file); };
-                        items.Add(fileItem);
+                        if (hiddenForm == null || hiddenForm.IsDisposed)
+                        {
+                            return;
+                        }
+
+                        hiddenForm.BeginInvoke(new Action(() =>
+                        {
+                            if ((ownerMenuItem != null && ownerMenuItem.IsDisposed) || items == null)
+                            {
+                                return;
+                            }
+
+                            ToolStripDropDown dropDown = items.Owner as ToolStripDropDown;
+                            if (dropDown != null && dropDown.IsDisposed)
+                            {
+                                return;
+                            }
+
+                            items.Clear();
+                            items.Add(new ToolStripMenuItem(GetLocalizedText("오류", "Error"))
+                            {
+                                Enabled = false
+                            });
+
+                            if (includeRootExtras)
+                            {
+                                AddRootFooterItems(folderPath, items);
+                            }
+                            else
+                            {
+                                AddFolderFooterItems(folderPath, items);
+                            }
+
+                            FolderMenuMetadata metadata = null;
+                            if (ownerMenuItem != null)
+                            {
+                                metadata = ownerMenuItem.Tag as FolderMenuMetadata;
+                            }
+                            if (metadata != null)
+                            {
+                                metadata.IsLoading = false;
+                            }
+
+                            MessageBox.Show(GetLocalizedText(
+                                "폴더 메뉴 구성 중 오류 발생: " + ex.Message,
+                                "Error building folder menu: " + ex.Message));
+                        }));
+                    }
+                });
+            }
+
+            private void ApplyFolderEntries(string folderPath, ToolStripItemCollection items, IReadOnlyList<FolderItemInfo> entries, bool includeRootExtras, ToolStripMenuItem ownerMenuItem)
+            {
+                items.Clear();
+
+                int addedCount = 0;
+                foreach (var folder in entries.Where(e => e.IsFolder))
+                {
+                    items.Add(CreateFolderMenuItem(folder));
+                    addedCount++;
+                }
+
+                foreach (var file in entries.Where(e => !e.IsFolder))
+                {
+                    items.Add(CreateFileMenuItem(file));
+                    addedCount++;
+                }
+
+                if (addedCount == 0)
+                {
+                    AddEmptyPlaceholder(items);
+                }
+
+                if (includeRootExtras)
+                {
+                    AddRootFooterItems(folderPath, items);
+                }
+                else
+                {
+                    AddFolderFooterItems(folderPath, items);
+                }
+
+                if (ownerMenuItem != null)
+                {
+                    FolderMenuMetadata metadata = ownerMenuItem.Tag as FolderMenuMetadata;
+                    if (metadata != null)
+                    {
+                        metadata.IsLoading = false;
+                        metadata.HasEverLoaded = true;
+                        metadata.LastLoaded = DateTime.UtcNow;
                     }
                 }
-                catch (Exception ex)
+            }
+
+            private void AddRootFooterItems(string folderPath, ToolStripItemCollection items)
+            {
+                if (items.Count > 0)
                 {
-                    MessageBox.Show(GetLocalizedText(
-                        $"폴더 메뉴 구성 중 오류 발생: {ex.Message}",
-                        $"Error building folder menu: {ex.Message}"));
+                    items.Add(new ToolStripSeparator());
                 }
+
+                var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
+                openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", folderPath); };
+                items.Add(openInExplorer);
+
+                var closeMenu = new ToolStripMenuItem(GetLocalizedText("닫기", "Close"));
+                closeMenu.Click += (s, e) =>
+                {
+                    ToolStripMenuItem menuItem = s as ToolStripMenuItem;
+                    if (menuItem != null)
+                    {
+                        ToolStrip currentParent = menuItem.GetCurrentParent();
+                        if (currentParent != null)
+                        {
+                            currentParent.Close();
+                        }
+                    }
+                };
+                items.Add(closeMenu);
+            }
+
+            private void AddFolderFooterItems(string folderPath, ToolStripItemCollection items)
+            {
+                if (items.Count > 0)
+                {
+                    items.Add(new ToolStripSeparator());
+                }
+
+                var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
+                openInExplorer.Click += (s, e) => { Process.Start("explorer.exe", folderPath); };
+                items.Add(openInExplorer);
+            }
+
+            private void AddLoadingPlaceholder(ToolStripItemCollection items)
+            {
+                items.Clear();
+                items.Add(new ToolStripMenuItem(GetLocalizedText("불러오는 중...", "Loading..."))
+                {
+                    Enabled = false,
+                    Tag = loadingTag
+                });
+            }
+
+            private void AddEmptyPlaceholder(ToolStripItemCollection items)
+            {
+                items.Add(new ToolStripMenuItem(GetLocalizedText("표시할 항목이 없습니다", "No items available"))
+                {
+                    Enabled = false
+                });
+            }
+
+            private ToolStripMenuItem CreateFolderMenuItem(FolderItemInfo folder)
+            {
+                var folderItem = new ToolStripMenuItem(folder.Name, folder.Icon ?? folderBitmap);
+                var metadata = new FolderMenuMetadata
+                {
+                    FolderPath = folder.Path,
+                    SupportsLoading = folder.HasChildren
+                };
+                folderItem.Tag = metadata;
+                folderItem.DropDownOpening += FolderItem_DropDownOpening;
+
+                if (folder.HasChildren)
+                {
+                    AddLoadingPlaceholder(folderItem.DropDownItems);
+                }
+                else
+                {
+                    metadata.HasEverLoaded = true;
+                    metadata.LastLoaded = DateTime.UtcNow;
+                    AddEmptyPlaceholder(folderItem.DropDownItems);
+                    AddFolderFooterItems(folder.Path, folderItem.DropDownItems);
+                }
+
+                return folderItem;
+            }
+
+            private ToolStripMenuItem CreateFileMenuItem(FolderItemInfo file)
+            {
+                var fileItem = new ToolStripMenuItem(file.Name, file.Icon);
+                fileItem.Click += (s, e) => { RunProgram(file.Path); };
+                return fileItem;
+            }
+
+            private void FolderItem_DropDownOpening(object sender, EventArgs e)
+            {
+                ToolStripMenuItem folderItem = sender as ToolStripMenuItem;
+                if (folderItem == null)
+                {
+                    return;
+                }
+
+                FolderMenuMetadata metadata = folderItem.Tag as FolderMenuMetadata;
+                if (metadata == null)
+                {
+                    return;
+                }
+
+                if (!metadata.SupportsLoading)
+                {
+                    return;
+                }
+
+                if (metadata.IsLoading)
+                {
+                    return;
+                }
+
+                bool hasPlaceholder = folderItem.DropDownItems.Count == 1 && ReferenceEquals(folderItem.DropDownItems[0].Tag, loadingTag);
+                bool shouldReload = !metadata.HasEverLoaded || DateTime.UtcNow - metadata.LastLoaded > cacheDuration || hasPlaceholder;
+
+                if (!shouldReload)
+                {
+                    return;
+                }
+
+                metadata.IsLoading = true;
+                AddLoadingPlaceholder(folderItem.DropDownItems);
+                LoadFolderMenuItemsAsync(metadata.FolderPath, folderItem.DropDownItems, false, folderItem);
+            }
+
+            private IReadOnlyList<FolderItemInfo> GetFolderEntries(string folderPath)
+            {
+                var now = DateTime.UtcNow;
+                if (folderCache.TryGetValue(folderPath, out var cacheEntry))
+                {
+                    if (now - cacheEntry.CachedAt <= cacheDuration)
+                    {
+                        return cacheEntry.Items;
+                    }
+                }
+
+                var items = GetFolderItemsFromDisk(folderPath);
+                var entry = new FolderCacheEntry
+                {
+                    CachedAt = now,
+                    Items = items
+                };
+                folderCache[folderPath] = entry;
+                return entry.Items;
+            }
+
+            private IReadOnlyList<FolderItemInfo> GetFolderItemsFromDisk(string folderPath)
+            {
+                var items = new List<FolderItemInfo>();
+
+                foreach (var subFolder in Directory.EnumerateDirectories(folderPath))
+                {
+                    bool hasChildren = false;
+                    try
+                    {
+                        using (var enumerator = Directory.EnumerateFileSystemEntries(subFolder).GetEnumerator())
+                        {
+                            hasChildren = enumerator.MoveNext();
+                        }
+                    }
+                    catch
+                    {
+                        hasChildren = false;
+                    }
+
+                    items.Add(new FolderItemInfo
+                    {
+                        Name = Path.GetFileName(subFolder),
+                        Path = subFolder,
+                        IsFolder = true,
+                        HasChildren = hasChildren,
+                        Icon = folderBitmap
+                    });
+                }
+
+                foreach (var file in Directory.EnumerateFiles(folderPath))
+                {
+                    items.Add(new FolderItemInfo
+                    {
+                        Name = Path.GetFileName(file),
+                        Path = file,
+                        IsFolder = false,
+                        HasChildren = false,
+                        Icon = GetIconBitmap(file)
+                    });
+                }
+
+                items.Sort((x, y) =>
+                {
+                    int typeCompare = y.IsFolder.CompareTo(x.IsFolder);
+                    if (typeCompare != 0)
+                    {
+                        return typeCompare;
+                    }
+
+                    return string.Compare(x.Name, y.Name, StringComparison.CurrentCultureIgnoreCase);
+                });
+                return items;
+            }
+
+            private class FolderItemInfo
+            {
+                public string Name { get; set; }
+                public string Path { get; set; }
+                public bool IsFolder { get; set; }
+                public bool HasChildren { get; set; }
+                public Bitmap Icon { get; set; }
+            }
+
+            private class FolderCacheEntry
+            {
+                public DateTime CachedAt { get; set; }
+                public IReadOnlyList<FolderItemInfo> Items { get; set; }
+            }
+
+            private class FolderMenuMetadata
+            {
+                public string FolderPath { get; set; }
+                public bool SupportsLoading { get; set; }
+                public bool HasEverLoaded { get; set; }
+                public DateTime LastLoaded { get; set; }
+                public bool IsLoading { get; set; }
+            }
+
+            private Bitmap GetIconBitmap(string filePath)
+            {
+                if (string.IsNullOrEmpty(filePath))
+                {
+                    return defaultFileBitmap;
+                }
+
+                string extension = Path.GetExtension(filePath) ?? string.Empty;
+                bool useFullPath = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) || extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase);
+                string cacheKey = useFullPath ? filePath : extension;
+
+                return iconCache.GetOrAdd(cacheKey, key =>
+                {
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            using (var icon = Icon.ExtractAssociatedIcon(filePath))
+                            {
+                                if (icon != null)
+                                {
+                                    var bitmap = icon.ToBitmap();
+                                    if (bitmap != null)
+                                    {
+                                        return bitmap;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // ignore and fallback
+                    }
+
+                    return defaultFileBitmap;
+                });
             }
 
             /// <summary>
@@ -365,7 +713,12 @@ namespace QuickLaunchOnTray
             {
                 try
                 {
-                    Process.Start(programPath);
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = programPath,
+                        UseShellExecute = true
+                    };
+                    Process.Start(startInfo);
                 }
                 catch (Exception ex)
                 {
@@ -385,6 +738,31 @@ namespace QuickLaunchOnTray
                 {
                     icon.Visible = false;
                     icon.Dispose();
+                }
+
+                var disposedBitmaps = new HashSet<Bitmap>();
+                foreach (var bitmap in iconCache.Values)
+                {
+                    if (bitmap == null)
+                        continue;
+                    if (ReferenceEquals(bitmap, defaultFileBitmap) || ReferenceEquals(bitmap, folderBitmap))
+                        continue;
+                    if (disposedBitmaps.Add(bitmap))
+                    {
+                        bitmap.Dispose();
+                    }
+                }
+                iconCache.Clear();
+                folderCache.Clear();
+
+                if (folderBitmap != null)
+                {
+                    folderBitmap.Dispose();
+                }
+
+                if (defaultFileBitmap != null)
+                {
+                    defaultFileBitmap.Dispose();
                 }
 
                 // 폴더 아이콘 해제
