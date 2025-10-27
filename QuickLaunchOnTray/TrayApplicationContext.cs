@@ -223,7 +223,7 @@ namespace QuickLaunchOnTray
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    GetLocalizedText("폴더 메뉴 표시 중 오류 발생: " + ex.Message, "Error showing folder menu: " + ex.Message),
+                    _localizationService.GetString("ErrorShowingFolderMenu", ex.Message),
                     _localizationService.GetString("Error"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -277,7 +277,7 @@ namespace QuickLaunchOnTray
                         }
 
                         items.Clear();
-                        items.Add(new ToolStripMenuItem(GetLocalizedText("오류", "Error"))
+                        items.Add(new ToolStripMenuItem(_localizationService.GetString("Error"))
                         {
                             Enabled = false
                         });
@@ -298,7 +298,7 @@ namespace QuickLaunchOnTray
                         }
 
                         MessageBox.Show(
-                            GetLocalizedText("폴더 메뉴 구성 중 오류 발생: " + ex.Message, "Error building folder menu: " + ex.Message),
+                            _localizationService.GetString("ErrorBuildingFolderMenu", ex.Message),
                             _localizationService.GetString("Error"),
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
@@ -357,11 +357,11 @@ namespace QuickLaunchOnTray
                 items.Add(new ToolStripSeparator());
             }
 
-            var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
+            var openInExplorer = new ToolStripMenuItem(_localizationService.GetString("OpenInExplorer"));
             openInExplorer.Click += (s, e) => Process.Start("explorer.exe", folderPath);
             items.Add(openInExplorer);
 
-            var closeMenuItem = new ToolStripMenuItem(GetLocalizedText("닫기", "Close"));
+            var closeMenuItem = new ToolStripMenuItem(_localizationService.GetString("Close"));
             closeMenuItem.Click += (s, e) =>
             {
                 var menuItem = s as ToolStripMenuItem;
@@ -378,7 +378,7 @@ namespace QuickLaunchOnTray
                 items.Add(new ToolStripSeparator());
             }
 
-            var openInExplorer = new ToolStripMenuItem(GetLocalizedText("탐색기에서 열기", "Open in Explorer"));
+            var openInExplorer = new ToolStripMenuItem(_localizationService.GetString("OpenInExplorer"));
             openInExplorer.Click += (s, e) => Process.Start("explorer.exe", folderPath);
             items.Add(openInExplorer);
         }
@@ -386,7 +386,7 @@ namespace QuickLaunchOnTray
         private void AddLoadingPlaceholder(ToolStripItemCollection items)
         {
             items.Clear();
-            items.Add(new ToolStripMenuItem(GetLocalizedText("불러오는 중...", "Loading..."))
+            items.Add(new ToolStripMenuItem(_localizationService.GetString("Loading"))
             {
                 Enabled = false,
                 Tag = _loadingTag
@@ -395,7 +395,7 @@ namespace QuickLaunchOnTray
 
         private void AddEmptyPlaceholder(ToolStripItemCollection items)
         {
-            items.Add(new ToolStripMenuItem(GetLocalizedText("표시할 항목이 없습니다", "No items available"))
+            items.Add(new ToolStripMenuItem(_localizationService.GetString("NoItemsAvailable"))
             {
                 Enabled = false
             });
@@ -669,11 +669,7 @@ namespace QuickLaunchOnTray
 
             base.Dispose(disposing);
         }
-
-        private string GetLocalizedText(string koreanText, string englishText)
-        {
-            return _localizationService.IsKoreanSystem() ? koreanText : englishText;
-        }
+        
 
         private class FolderItemInfo
         {
