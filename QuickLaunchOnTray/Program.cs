@@ -580,7 +580,8 @@ namespace QuickLaunchOnTray
             private IReadOnlyList<FolderItemInfo> GetFolderEntries(string folderPath)
             {
                 var now = DateTime.UtcNow;
-                if (folderCache.TryGetValue(folderPath, out var cacheEntry))
+                FolderCacheEntry cacheEntry;
+                if (folderCache.TryGetValue(folderPath, out cacheEntry))
                 {
                     if (now - cacheEntry.CachedAt <= cacheDuration)
                     {
