@@ -209,7 +209,8 @@ namespace QuickLaunchOnTray
 
                 if (_hiddenForm != null && !_hiddenForm.IsDisposed)
                 {
-                    if (GetCursorPos(out POINT cursor))
+                    POINT cursor;
+                    if (GetCursorPos(out cursor))
                     {
                         folderMenu.Show(_hiddenForm, _hiddenForm.PointToClient(new Point(cursor.X, cursor.Y)));
                     }
