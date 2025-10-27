@@ -438,6 +438,15 @@ namespace QuickLaunchOnTray
                         metadata.HasEverLoaded = true;
                         metadata.LastLoaded = DateTime.UtcNow;
                     }
+                };
+                items.Add(closeMenu);
+            }
+
+            private void AddFolderFooterItems(string folderPath, ToolStripItemCollection items)
+            {
+                if (items.Count > 0)
+                {
+                    items.Add(new ToolStripSeparator());
                 }
             }
 
