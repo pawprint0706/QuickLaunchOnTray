@@ -29,7 +29,7 @@ namespace QuickLaunchOnTray
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    $"프로그램 실행 중 오류가 발생했습니다: {ex.Message}",
+                    string.Format("프로그램 실행 중 오류가 발생했습니다: {0}", ex.Message),
                     "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -112,7 +112,7 @@ namespace QuickLaunchOnTray
                     folderIcon = SystemIcons.Application;
                 }
 
-                folderBitmap = folderIcon?.ToBitmap();
+                folderBitmap = folderIcon != null ? folderIcon.ToBitmap() : null;
                 defaultFileBitmap = SystemIcons.Application.ToBitmap();
 
                 // 실행 파일과 같은 폴더의 config.ini 파일 경로 지정
@@ -312,8 +312,8 @@ namespace QuickLaunchOnTray
                 catch (Exception ex)
                 {
                     MessageBox.Show(GetLocalizedText(
-                        $"폴더 메뉴 표시 중 오류 발생: {ex.Message}",
-                        $"Error showing folder menu: {ex.Message}"));
+                        "폴더 메뉴 표시 중 오류 발생: " + ex.Message,
+                        "Error showing folder menu: " + ex.Message));
                 }
             }
 
@@ -336,7 +336,8 @@ namespace QuickLaunchOnTray
                                 return;
                             }
 
-                            if (items.Owner is ToolStripDropDown dropDown && dropDown.IsDisposed)
+                            ToolStripDropDown dropDown = items.Owner as ToolStripDropDown;
+                            if (dropDown != null && dropDown.IsDisposed)
                             {
                                 return;
                             }
@@ -358,7 +359,8 @@ namespace QuickLaunchOnTray
                                 return;
                             }
 
-                            if (items.Owner is ToolStripDropDown dropDown && dropDown.IsDisposed)
+                            ToolStripDropDown dropDown = items.Owner as ToolStripDropDown;
+                            if (dropDown != null && dropDown.IsDisposed)
                             {
                                 return;
                             }
@@ -378,14 +380,19 @@ namespace QuickLaunchOnTray
                                 AddFolderFooterItems(folderPath, items);
                             }
 
-                            if (ownerMenuItem?.Tag is FolderMenuMetadata metadata)
+                            FolderMenuMetadata metadata = null;
+                            if (ownerMenuItem != null)
+                            {
+                                metadata = ownerMenuItem.Tag as FolderMenuMetadata;
+                            }
+                            if (metadata != null)
                             {
                                 metadata.IsLoading = false;
                             }
 
                             MessageBox.Show(GetLocalizedText(
-                                $"폴더 메뉴 구성 중 오류 발생: {ex.Message}",
-                                $"Error building folder menu: {ex.Message}"));
+                                "폴더 메뉴 구성 중 오류 발생: " + ex.Message,
+                                "Error building folder menu: " + ex.Message));
                         }));
                     }
                 });
@@ -422,11 +429,24 @@ namespace QuickLaunchOnTray
                     AddFolderFooterItems(folderPath, items);
                 }
 
-                if (ownerMenuItem?.Tag is FolderMenuMetadata metadata)
+                if (ownerMenuItem != null)
                 {
-                    metadata.IsLoading = false;
-                    metadata.HasEverLoaded = true;
-                    metadata.LastLoaded = DateTime.UtcNow;
+                    FolderMenuMetadata metadata = ownerMenuItem.Tag as FolderMenuMetadata;
+                    if (metadata != null)
+                    {
+                        metadata.IsLoading = false;
+                        metadata.HasEverLoaded = true;
+                        metadata.LastLoaded = DateTime.UtcNow;
+                    }
+                };
+                items.Add(closeMenu);
+            }
+
+            private void AddFolderFooterItems(string folderPath, ToolStripItemCollection items)
+            {
+                if (items.Count > 0)
+                {
+                    items.Add(new ToolStripSeparator());
                 }
             }
 
@@ -444,9 +464,14 @@ namespace QuickLaunchOnTray
                 var closeMenu = new ToolStripMenuItem(GetLocalizedText("닫기", "Close"));
                 closeMenu.Click += (s, e) =>
                 {
-                    if (s is ToolStripMenuItem menuItem)
+                    ToolStripMenuItem menuItem = s as ToolStripMenuItem;
+                    if (menuItem != null)
                     {
-                        menuItem.GetCurrentParent()?.Close();
+                        ToolStrip currentParent = menuItem.GetCurrentParent();
+                        if (currentParent != null)
+                        {
+                            currentParent.Close();
+                        }
                     }
                 };
                 items.Add(closeMenu);
@@ -517,12 +542,14 @@ namespace QuickLaunchOnTray
 
             private void FolderItem_DropDownOpening(object sender, EventArgs e)
             {
-                if (sender is not ToolStripMenuItem folderItem)
+                ToolStripMenuItem folderItem = sender as ToolStripMenuItem;
+                if (folderItem == null)
                 {
                     return;
                 }
 
-                if (folderItem.Tag is not FolderMenuMetadata metadata)
+                FolderMenuMetadata metadata = folderItem.Tag as FolderMenuMetadata;
+                if (metadata == null)
                 {
                     return;
                 }
@@ -547,7 +574,7 @@ namespace QuickLaunchOnTray
 
                 metadata.IsLoading = true;
                 AddLoadingPlaceholder(folderItem.DropDownItems);
-                LoadFolderMenuItemsAsync(metadata.FolderPath, folderItem.DropDownItems, includeRootExtras: false, ownerMenuItem: folderItem);
+                LoadFolderMenuItemsAsync(metadata.FolderPath, folderItem.DropDownItems, false, folderItem);
             }
 
             private IReadOnlyList<FolderItemInfo> GetFolderEntries(string folderPath)
@@ -660,7 +687,7 @@ namespace QuickLaunchOnTray
                 bool useFullPath = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) || extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase);
                 string cacheKey = useFullPath ? filePath : extension;
 
-                return iconCache.GetOrAdd(cacheKey, _ =>
+                return iconCache.GetOrAdd(cacheKey, key =>
                 {
                     try
                     {
