@@ -1,7 +1,5 @@
 # QuickLaunchOnTray
 
-![thumbnail](https://github.com/user-attachments/assets/b001d4b6-9e99-4328-9d00-3c2727af53b3)
-
 ### 소개  
 QuickLaunchOnTray는 Windows 시스템 트레이에 사용자가 지정한 프로그램 및 폴더들의 아이콘을 등록하여 손쉽게 실행할 수 있도록 도와주는 유틸리티입니다.
 
