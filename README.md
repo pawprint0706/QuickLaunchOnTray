@@ -56,7 +56,8 @@ C:\Windows\System32\calc.exe
 | 우클릭 | 컨텍스트 메뉴(프로그램 실행 / 종료) | 컨텍스트 메뉴(폴더 열기 / 종료) |
 
 - 폴더 내용 메뉴: 하위 폴더는 펼칠 때 읽어 오며(지연 로딩), 한 번 읽은 목록은 30초 동안 재사용합니다.
-  하위 폴더 메뉴와 루트 메뉴 모두 `새로 고침`(캐시를 버리고 다시 읽기)과 `탐색기에서 열기`를 제공하고, 루트 메뉴에는 `닫기`가 있습니다.
+  하위 폴더 메뉴와 루트 메뉴 모두 `새로 고침`(캐시를 버리고 다시 읽기)과 `탐색기에서 열기`를 제공합니다.
+- 메뉴 닫기: 바깥 아무 곳이나 클릭하거나(첫 클릭은 메뉴가 소비합니다), 다른 창으로 전환하거나, `ESC`를 누르면 닫힙니다.
 - 파일 항목을 클릭하면 해당 파일을 기본 연결 프로그램으로 엽니다.
 - 프로그램 실행에 실패하면 오류 대화상자를 보여 줍니다.
 - 트레이 아이콘이 모두 사라지는 유일한 경로는 우클릭 메뉴의 `'QuickLaunchOnTray' 종료`(확인 후)입니다.
@@ -182,7 +183,8 @@ Downloads=C:\Users\Public\Downloads
 | Right click | Context menu (run program / terminate) | Context menu (open folder / terminate) |
 
 - Folder contents menu: subfolders are read lazily when expanded and the listing is cached for 30 seconds.
-  Both subfolder menus and the root menu offer `Refresh` (drop the cache and read again) and `Open in Explorer`; the root menu also has `Close`.
+  Both subfolder menus and the root menu offer `Refresh` (drop the cache and read again) and `Open in Explorer`.
+- Dismissing a menu: click anywhere outside (the first click is consumed by the menu), switch to another window, or press `ESC`.
 - Clicking a file entry opens it with its default association.
 - A failed launch shows an error dialog.
 - The only way to remove all tray icons is `Terminate 'QuickLaunchOnTray'` from the right-click menu (after confirmation).

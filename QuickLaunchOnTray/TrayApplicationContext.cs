@@ -20,8 +20,17 @@ namespace QuickLaunchOnTray
         /// <summary>설정된 폴더의 목록/아이콘을 미리 읽기 시작할 때까지의 지연(로그온 직후 디스크 경합 완화).</summary>
         private const int WarmupDelayMilliseconds = 2000;
 
+        /// <summary>메뉴 표시 후 전경 상태를 넘겨주기 위해 보내는 빈 메시지.</summary>
+        private const uint WmNull = 0x0000;
+
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
@@ -268,6 +277,11 @@ namespace QuickLaunchOnTray
 
                 if (_hiddenForm != null && !_hiddenForm.IsDisposed)
                 {
+                    // 메뉴를 띄우기 전에 이 프로세스를 전경으로 만든다.
+                    // 그러지 않으면 바깥 클릭으로는 닫히지만, 창 전환(Alt+Tab 등)만으로는 닫히지 않는다.
+                    // 셸 트레이 메뉴가 쓰는 표준 방식(SetForegroundWindow → 표시 → WM_NULL)이다.
+                    SetForegroundWindow(_hiddenForm.Handle);
+
                     POINT cursor;
                     if (GetCursorPos(out cursor))
                     {
@@ -277,6 +291,8 @@ namespace QuickLaunchOnTray
                     {
                         folderMenu.Show(Cursor.Position);
                     }
+
+                    PostMessage(_hiddenForm.Handle, WmNull, IntPtr.Zero, IntPtr.Zero);
                 }
             }
             catch (Exception ex)
@@ -444,15 +460,6 @@ namespace QuickLaunchOnTray
             var openInExplorer = new ToolStripMenuItem(_localizationService.GetString("OpenInExplorer"));
             openInExplorer.Click += (s, e) => Process.Start("explorer.exe", folderPath);
             items.Add(openInExplorer);
-
-            var closeMenuItem = new ToolStripMenuItem(_localizationService.GetString("Close"));
-            closeMenuItem.Click += (s, e) =>
-            {
-                var menuItem = s as ToolStripMenuItem;
-                var parent = menuItem?.GetCurrentParent() as ToolStripDropDown;
-                parent?.Close();
-            };
-            items.Add(closeMenuItem);
         }
 
         private void AddFolderFooterItems(string folderPath, ToolStripItemCollection items)
