@@ -118,117 +118,75 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="ConfigFileNotFound" xml:space="preserve">
-    <value>Could not find 'config.ini' file: {0}</value>
+    <value>Could not find 'config.ini': {0}</value>
   </data>
-  <data name="ConfigFileNotFound_ko" xml:space="preserve">
-    <value>'config.ini' 파일을 찾을 수 없습니다: {0}</value>
+  <data name="ConfigReadError" xml:space="preserve">
+    <value>Error occurred while reading the configuration file.</value>
+  </data>
+  <data name="NoProgramsSection" xml:space="preserve">
+    <value>'config.ini' has no [Programs] section.</value>
   </data>
   <data name="NoProgramInfo" xml:space="preserve">
-    <value>There is no information about the program to run in the 'config.ini' file.</value>
+    <value>There is no valid entry in 'config.ini'.</value>
   </data>
-  <data name="NoProgramInfo_ko" xml:space="preserve">
-    <value>'config.ini' 파일에 실행할 프로그램 정보가 없습니다.</value>
+  <data name="ConfigEntrySkipped" xml:space="preserve">
+    <value>Line {0} was skipped: {1}</value>
   </data>
-  <data name="OpenFolder" xml:space="preserve">
-    <value>Open folder</value>
-  </data>
-  <data name="OpenFolder_ko" xml:space="preserve">
-    <value>폴더 열기</value>
-  </data>
-  <data name="RunProgram" xml:space="preserve">
-    <value>Run this program</value>
-  </data>
-  <data name="RunProgram_ko" xml:space="preserve">
-    <value>프로그램 실행</value>
-  </data>
-  <data name="TerminateApp" xml:space="preserve">
-    <value>Terminate 'QuickLaunchOnTray'</value>
-  </data>
-  <data name="TerminateApp_ko" xml:space="preserve">
-    <value>'QuickLaunchOnTray' 종료</value>
-  </data>
-  <data name="ConfirmTermination" xml:space="preserve">
-    <value>Are you sure you want to terminate 'QuickLaunchOnTray'? All quick launch icons will disappear.</value>
-  </data>
-  <data name="ConfirmTermination_ko" xml:space="preserve">
-    <value>'QuickLaunchOnTray'를 종료하시겠습니까? 모든 빠른 실행 아이콘이 사라집니다.</value>
-  </data>
-  <data name="Confirm" xml:space="preserve">
-    <value>Confirm</value>
-  </data>
-  <data name="Confirm_ko" xml:space="preserve">
-    <value>확인</value>
-  </data>
-  <data name="Error" xml:space="preserve">
-    <value>Error</value>
-  </data>
-  <data name="Error_ko" xml:space="preserve">
-    <value>오류</value>
-  </data>
-  <data name="ProgramRunError" xml:space="preserve">
-    <value>Error occurred while running program: {0}</value>
-  </data>
-  <data name="ProgramRunError_ko" xml:space="preserve">
-    <value>프로그램 실행 중 오류가 발생했습니다: {0}</value>
+  <data name="EntryCreateSkipped" xml:space="preserve">
+    <value>Could not register '{0}': {1}</value>
   </data>
   <data name="EmptyPath" xml:space="preserve">
     <value>Path is empty.</value>
   </data>
-  <data name="EmptyPath_ko" xml:space="preserve">
-    <value>경로가 비어있습니다.</value>
-  </data>
   <data name="PathNotExist" xml:space="preserve">
     <value>Path does not exist: {0}</value>
   </data>
-  <data name="PathNotExist_ko" xml:space="preserve">
-    <value>경로가 존재하지 않습니다: {0}</value>
+  <data name="Error" xml:space="preserve">
+    <value>Error</value>
   </data>
-  <data name="ConfigReadError" xml:space="preserve">
-    <value>Error occurred while reading configuration file.</value>
+  <data name="Warning" xml:space="preserve">
+    <value>Warning</value>
   </data>
-  <data name="ConfigReadError_ko" xml:space="preserve">
-    <value>설정 파일을 읽는 중 오류가 발생했습니다.</value>
+  <data name="AlreadyRunning" xml:space="preserve">
+    <value>'QuickLaunchOnTray' is already running. Check the notification area.</value>
   </data>
-  <data name="CannotRunProgram" xml:space="preserve">
-    <value>Cannot run program: {0}</value>
+  <data name="OpenFolder" xml:space="preserve">
+    <value>Open folder</value>
   </data>
-  <data name="CannotRunProgram_ko" xml:space="preserve">
-    <value>프로그램을 실행할 수 없습니다: {0}</value>
+  <data name="RunProgram" xml:space="preserve">
+    <value>Run this program</value>
+  </data>
+  <data name="TerminateApp" xml:space="preserve">
+    <value>Terminate 'QuickLaunchOnTray'</value>
+  </data>
+  <data name="ConfirmTermination" xml:space="preserve">
+    <value>Are you sure you want to terminate 'QuickLaunchOnTray'? All quick launch icons will disappear.</value>
+  </data>
+  <data name="Confirm" xml:space="preserve">
+    <value>Confirm</value>
+  </data>
+  <data name="ProgramRunError" xml:space="preserve">
+    <value>Error occurred while running program: {0}</value>
   </data>
   <data name="ErrorShowingFolderMenu" xml:space="preserve">
     <value>Error showing folder menu: {0}</value>
   </data>
-  <data name="ErrorShowingFolderMenu_ko" xml:space="preserve">
-    <value>폴더 메뉴 표시 중 오류 발생: {0}</value>
-  </data>
   <data name="ErrorBuildingFolderMenu" xml:space="preserve">
     <value>Error building folder menu: {0}</value>
-  </data>
-  <data name="ErrorBuildingFolderMenu_ko" xml:space="preserve">
-    <value>폴더 메뉴 구성 중 오류 발생: {0}</value>
   </data>
   <data name="OpenInExplorer" xml:space="preserve">
     <value>Open in Explorer</value>
   </data>
-  <data name="OpenInExplorer_ko" xml:space="preserve">
-    <value>탐색기에서 열기</value>
-  </data>
   <data name="Close" xml:space="preserve">
     <value>Close</value>
-  </data>
-  <data name="Close_ko" xml:space="preserve">
-    <value>닫기</value>
   </data>
   <data name="Loading" xml:space="preserve">
     <value>Loading...</value>
   </data>
-  <data name="Loading_ko" xml:space="preserve">
-    <value>불러오는 중...</value>
-  </data>
   <data name="NoItemsAvailable" xml:space="preserve">
     <value>No items available</value>
   </data>
-  <data name="NoItemsAvailable_ko" xml:space="preserve">
-    <value>표시할 항목이 없습니다</value>
+  <data name="Refresh" xml:space="preserve">
+    <value>Refresh</value>
   </data>
 </root>

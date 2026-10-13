@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -15,14 +14,14 @@ namespace QuickLaunchOnTray
 {
     public class TrayApplicationContext : ApplicationContext, IDisposable
     {
+        /// <summary>NotifyIcon.Text 상한. 이 값을 넘기면 ArgumentOutOfRangeException이 발생한다.</summary>
+        private const int MaxTooltipLength = 63;
+
+        /// <summary>설정된 폴더의 목록/아이콘을 미리 읽기 시작할 때까지의 지연(로그온 직후 디스크 경합 완화).</summary>
+        private const int WarmupDelayMilliseconds = 2000;
+
         [DllImport("user32.dll")]
         private static extern bool GetCursorPos(out POINT lpPoint);
-
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern bool DestroyIcon(IntPtr handle);
 
         [StructLayout(LayoutKind.Sequential)]
         private struct POINT
@@ -34,115 +33,147 @@ namespace QuickLaunchOnTray
         private readonly List<NotifyIcon> _trayIcons = new List<NotifyIcon>();
         private readonly ConfigurationService _configService;
         private readonly LocalizationService _localizationService;
-        private readonly ConcurrentDictionary<string, Bitmap> _iconCache =
-            new ConcurrentDictionary<string, Bitmap>(StringComparer.OrdinalIgnoreCase);
-        private readonly ConcurrentDictionary<string, FolderCacheEntry> _folderCache =
-            new ConcurrentDictionary<string, FolderCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        private readonly IconImageCache _iconImages;
+        private readonly FolderIndexCache _folderIndexCache;
         private readonly TimeSpan _cacheDuration = TimeSpan.FromSeconds(30);
         private readonly object _loadingTag = new object();
 
         private readonly Icon _folderIcon;
         private readonly Bitmap _folderBitmap;
+        private readonly Icon _defaultFileIcon;
         private readonly Bitmap _defaultFileBitmap;
         private readonly Form _hiddenForm;
+        private System.Threading.Timer _warmupTimer;
         private bool _disposed;
 
+        /// <summary>
+        /// config.ini의 각 항목에 대한 트레이 아이콘을 등록한다.
+        /// 항목 단위 실패는 경고로 모아 알리고, 등록된 아이콘이 하나도 없으면 예외를 던진다.
+        /// </summary>
         public TrayApplicationContext()
         {
             _configService = new ConfigurationService();
             _localizationService = LocalizationService.Instance;
 
-            _folderIcon = InitializeFolderIcon();
-            _folderBitmap = _folderIcon?.ToBitmap();
-            _defaultFileBitmap = SystemIcons.Application.ToBitmap();
+            _folderIcon = IconLoader.LoadShellIcon(IconLoader.FolderIconIndex) ?? IconLoader.CreateDefaultIcon();
+            _folderBitmap = _folderIcon.ToBitmap();
+            _defaultFileIcon = IconLoader.CreateDefaultIcon();
+            _defaultFileBitmap = _defaultFileIcon.ToBitmap();
 
-            try
+            _iconImages = new IconImageCache();
+            _folderIndexCache = new FolderIndexCache(_iconImages);
+
+            var loadResult = _configService.LoadProgramItems();
+            var warnings = new List<string>(loadResult.Warnings);
+
+            foreach (var item in loadResult.Items)
             {
-                var programItems = _configService.LoadProgramItems();
-                foreach (var item in programItems)
+                try
                 {
                     CreateTrayIconForProgram(item);
                 }
-
-                _hiddenForm = new Form
+                catch (Exception ex)
                 {
-                    FormBorderStyle = FormBorderStyle.None,
-                    ShowInTaskbar = false,
-                    StartPosition = FormStartPosition.Manual,
-                    Size = new Size(1, 1),
-                    Location = new Point(-2000, -2000),
-                    Opacity = 0
-                };
-                _hiddenForm.Show();
-                _hiddenForm.Hide();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    ex.Message,
-                    _localizationService.GetString("Error"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-                Environment.Exit(1);
-            }
-        }
-
-        private Icon InitializeFolderIcon()
-        {
-            try
-            {
-                string systemFolder = Environment.GetFolderPath(Environment.SpecialFolder.System);
-                IntPtr handle = ExtractIcon(IntPtr.Zero, Path.Combine(systemFolder, "shell32.dll"), 3);
-                if (handle != IntPtr.Zero)
-                {
-                    using (var tempIcon = Icon.FromHandle(handle))
-                    {
-                        Icon clone = (Icon)tempIcon.Clone();
-                        DestroyIcon(handle);
-                        return clone;
-                    }
+                    warnings.Add(_localizationService.GetString("EntryCreateSkipped", item.Name, ex.Message));
                 }
             }
-            catch
+
+            if (_trayIcons.Count == 0)
             {
-                // Ignore and fall back to default.
+                throw new InvalidOperationException(
+                    warnings.Count > 0
+                        ? string.Join(Environment.NewLine, warnings)
+                        : _localizationService.GetString("NoProgramInfo"));
             }
 
-            return SystemIcons.Application;
+            _hiddenForm = CreateHiddenForm();
+
+            if (warnings.Count > 0)
+            {
+                MessageBox.Show(
+                    string.Join(Environment.NewLine, warnings),
+                    _localizationService.GetString("Warning"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            StartWarmup(loadResult.Items.Where(item => Directory.Exists(item.Path)).Select(item => item.Path).ToList());
+        }
+
+        /// <summary>설정된 폴더들의 항목 목록과 아이콘을 백그라운드에서 미리 읽어 첫 클릭을 빠르게 한다.</summary>
+        private void StartWarmup(IReadOnlyList<string> folderPaths)
+        {
+            if (folderPaths == null || folderPaths.Count == 0)
+            {
+                return;
+            }
+
+            _warmupTimer = new System.Threading.Timer(
+                state =>
+                {
+                    try
+                    {
+                        foreach (string folderPath in folderPaths)
+                        {
+                            _folderIndexCache.Warm(folderPath);
+                        }
+
+                        CacheStorage.PruneAll();
+                    }
+                    catch
+                    {
+                        // 예열과 정리는 실패해도 무시한다.
+                    }
+                },
+                null,
+                WarmupDelayMilliseconds,
+                System.Threading.Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// 폴더 메뉴의 owner 겸 BeginInvoke 대상으로 쓰는 보이지 않는 1x1 폼.
+        /// </summary>
+        private static Form CreateHiddenForm()
+        {
+            var form = new Form
+            {
+                FormBorderStyle = FormBorderStyle.None,
+                ShowInTaskbar = false,
+                StartPosition = FormStartPosition.Manual,
+                Size = new Size(1, 1),
+                Location = new Point(-2000, -2000),
+                Opacity = 0
+            };
+            form.Show();
+            form.Hide();
+            return form;
         }
 
         private void CreateTrayIconForProgram(ProgramItem item)
         {
+            bool isFolder = Directory.Exists(item.Path);
+
             Icon icon;
             try
             {
-                if (Directory.Exists(item.Path))
-                {
-                    icon = _folderIcon;
-                }
-                else if (File.Exists(item.Path))
-                {
-                    icon = Icon.ExtractAssociatedIcon(item.Path) ?? SystemIcons.Application;
-                }
-                else
-                {
-                    icon = SystemIcons.Application;
-                }
+                icon = isFolder
+                    ? _folderIcon
+                    : IconLoader.LoadFileIcon(item.Path) ?? _defaultFileIcon;
             }
             catch
             {
-                icon = SystemIcons.Application;
+                icon = _defaultFileIcon;
             }
 
             var notifyIcon = new NotifyIcon
             {
                 Icon = icon,
-                Text = item.Name,
+                Text = BuildTooltip(item.Name, item.Path),
                 Visible = true
             };
 
             var menu = new ContextMenuStrip();
-            string menuText = Directory.Exists(item.Path)
+            string menuText = isFolder
                 ? _localizationService.GetString("OpenFolder")
                 : _localizationService.GetString("RunProgram");
 
@@ -194,6 +225,29 @@ namespace QuickLaunchOnTray
             _trayIcons.Add(notifyIcon);
         }
 
+        /// <summary>툴팁 문자열을 만든다. 빈 이름은 경로에서 만들고, 상한을 넘는 이름은 잘라낸다.</summary>
+        private static string BuildTooltip(string name, string path)
+        {
+            string text = name;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text = ProgramItem.DeriveDisplayName(path);
+            }
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                text = path;
+            }
+
+            if (text == null)
+            {
+                return string.Empty;
+            }
+
+            return text.Length > MaxTooltipLength ? text.Substring(0, MaxTooltipLength) : text;
+        }
+
         private void ShowFolderContextMenuWithFiles(string folderPath)
         {
             try
@@ -204,6 +258,11 @@ namespace QuickLaunchOnTray
                 }
 
                 var folderMenu = new ContextMenuStrip();
+
+                // Closed에서 곧바로 Dispose하면 ToolStripDropDown.Close() 내부가 파괴된 핸들을 만져
+                // ObjectDisposedException이 발생한다(실측). Close()가 끝난 뒤 메시지 큐에서 정리한다.
+                folderMenu.Closed += (s, e) => DisposeMenuDeferred(folderMenu);
+
                 AddLoadingPlaceholder(folderMenu.Items);
                 LoadFolderMenuItemsAsync(folderPath, folderMenu, folderMenu.Items, true, null);
 
@@ -230,13 +289,36 @@ namespace QuickLaunchOnTray
             }
         }
 
+        /// <summary>
+        /// 닫힌 폴더 메뉴를 메시지 큐에서 정리한다. Closed 핸들러에서 바로 Dispose하면
+        /// ToolStripDropDown.Close() 내부가 파괴된 핸들을 만져 ObjectDisposedException이 발생한다(실측).
+        /// </summary>
+        private void DisposeMenuDeferred(ContextMenuStrip menu)
+        {
+            var hiddenForm = _hiddenForm;
+            if (hiddenForm == null || hiddenForm.IsDisposed)
+            {
+                // 종료 중: 남은 창 핸들은 프로세스 종료로 회수된다.
+                return;
+            }
+
+            try
+            {
+                hiddenForm.BeginInvoke(new Action(menu.Dispose));
+            }
+            catch (InvalidOperationException)
+            {
+                // 이미 창 핸들이 파괴된 경우(종료 중). ObjectDisposedException도 이 형식에 포함된다.
+            }
+        }
+
         private void LoadFolderMenuItemsAsync(string folderPath, ToolStrip owner, ToolStripItemCollection items, bool includeRootExtras, ToolStripMenuItem ownerMenuItem)
         {
             Task.Run(() =>
             {
                 try
                 {
-                    var entries = GetFolderEntries(folderPath);
+                    var entries = _folderIndexCache.GetEntries(folderPath);
                     if (_hiddenForm == null || _hiddenForm.IsDisposed)
                     {
                         return;
@@ -307,7 +389,7 @@ namespace QuickLaunchOnTray
             });
         }
 
-        private void ApplyFolderEntries(string folderPath, ToolStrip owner, ToolStripItemCollection items, IReadOnlyList<FolderItemInfo> entries, bool includeRootExtras, ToolStripMenuItem ownerMenuItem)
+        private void ApplyFolderEntries(string folderPath, ToolStrip owner, ToolStripItemCollection items, IReadOnlyList<FolderEntry> entries, bool includeRootExtras, ToolStripMenuItem ownerMenuItem)
         {
             items.Clear();
 
@@ -357,6 +439,8 @@ namespace QuickLaunchOnTray
                 items.Add(new ToolStripSeparator());
             }
 
+            items.Add(CreateRefreshMenuItem(folderPath));
+
             var openInExplorer = new ToolStripMenuItem(_localizationService.GetString("OpenInExplorer"));
             openInExplorer.Click += (s, e) => Process.Start("explorer.exe", folderPath);
             items.Add(openInExplorer);
@@ -378,9 +462,46 @@ namespace QuickLaunchOnTray
                 items.Add(new ToolStripSeparator());
             }
 
+            items.Add(CreateRefreshMenuItem(folderPath));
+
             var openInExplorer = new ToolStripMenuItem(_localizationService.GetString("OpenInExplorer"));
             openInExplorer.Click += (s, e) => Process.Start("explorer.exe", folderPath);
             items.Add(openInExplorer);
+        }
+
+        private ToolStripMenuItem CreateRefreshMenuItem(string folderPath)
+        {
+            var refreshItem = new ToolStripMenuItem(_localizationService.GetString("Refresh"));
+            refreshItem.Click += (s, e) => RefreshMenu(folderPath, s as ToolStripMenuItem);
+            return refreshItem;
+        }
+
+        /// <summary>캐시를 버리고 해당 폴더 메뉴를 다시 읽는다. 실행 중인 메뉴는 클릭으로 닫히며, 다시 열면 갱신된 목록이 보인다.</summary>
+        private void RefreshMenu(string folderPath, ToolStripMenuItem clickedItem)
+        {
+            _folderIndexCache.Invalidate(folderPath);
+
+            var dropdown = clickedItem != null ? clickedItem.GetCurrentParent() as ToolStripDropDown : null;
+            var ownerMenuItem = dropdown != null ? dropdown.OwnerItem as ToolStripMenuItem : null;
+
+            if (ownerMenuItem != null)
+            {
+                var metadata = ownerMenuItem.Tag as FolderMenuMetadata;
+                if (metadata != null)
+                {
+                    metadata.IsLoading = false;
+                    metadata.HasEverLoaded = false;
+                    metadata.SupportsLoading = true;
+                }
+            }
+
+            if (dropdown == null)
+            {
+                return;
+            }
+
+            AddLoadingPlaceholder(dropdown.Items);
+            LoadFolderMenuItemsAsync(folderPath, dropdown, dropdown.Items, ownerMenuItem == null, ownerMenuItem);
         }
 
         private void AddLoadingPlaceholder(ToolStripItemCollection items)
@@ -401,9 +522,9 @@ namespace QuickLaunchOnTray
             });
         }
 
-        private ToolStripMenuItem CreateFolderMenuItem(FolderItemInfo folder)
+        private ToolStripMenuItem CreateFolderMenuItem(FolderEntry folder)
         {
-            var folderItem = new ToolStripMenuItem(folder.Name, folder.Icon ?? _folderBitmap);
+            var folderItem = new ToolStripMenuItem(folder.Name, folder.Image ?? _folderBitmap);
             var metadata = new FolderMenuMetadata
             {
                 FolderPath = folder.Path,
@@ -427,9 +548,9 @@ namespace QuickLaunchOnTray
             return folderItem;
         }
 
-        private ToolStripMenuItem CreateFileMenuItem(FolderItemInfo file)
+        private ToolStripMenuItem CreateFileMenuItem(FolderEntry file)
         {
-            var fileItem = new ToolStripMenuItem(file.Name, file.Icon ?? _defaultFileBitmap);
+            var fileItem = new ToolStripMenuItem(file.Name, file.Image ?? _defaultFileBitmap);
             fileItem.Click += (s, e) => RunProgram(file.Path);
             return fileItem;
         }
@@ -443,9 +564,22 @@ namespace QuickLaunchOnTray
             }
 
             var metadata = folderItem.Tag as FolderMenuMetadata;
-            if (metadata == null || !metadata.SupportsLoading)
+            if (metadata == null)
             {
                 return;
+            }
+
+            if (!metadata.SupportsLoading)
+            {
+                // 캐시된 "하위 항목 없음" 상태는 낡을 수 있다(자식 폴더의 변경은 부모 폴더의 수정 시각에 영향을 주지 않는다).
+                // 이때만 디스크를 한 번 확인하고, 항목이 생겼으면 다시 읽는다.
+                if (!FolderIndexCache.HasChildrenNow(metadata.FolderPath))
+                {
+                    return;
+                }
+
+                metadata.SupportsLoading = true;
+                metadata.HasEverLoaded = false;
             }
 
             if (metadata.IsLoading)
@@ -464,136 +598,6 @@ namespace QuickLaunchOnTray
             metadata.IsLoading = true;
             AddLoadingPlaceholder(folderItem.DropDownItems);
             LoadFolderMenuItemsAsync(metadata.FolderPath, folderItem.DropDown, folderItem.DropDownItems, false, folderItem);
-        }
-
-        private IReadOnlyList<FolderItemInfo> GetFolderEntries(string folderPath)
-        {
-            var now = DateTime.UtcNow;
-            FolderCacheEntry cacheEntry;
-            if (_folderCache.TryGetValue(folderPath, out cacheEntry))
-            {
-                if (now - cacheEntry.CachedAt <= _cacheDuration)
-                {
-                    return cacheEntry.Items;
-                }
-            }
-
-            var items = GetFolderItemsFromDisk(folderPath);
-            var entry = new FolderCacheEntry
-            {
-                CachedAt = now,
-                Items = items
-            };
-            _folderCache[folderPath] = entry;
-            return entry.Items;
-        }
-
-        private IReadOnlyList<FolderItemInfo> GetFolderItemsFromDisk(string folderPath)
-        {
-            var items = new List<FolderItemInfo>();
-
-            try
-            {
-                foreach (var subFolder in Directory.EnumerateDirectories(folderPath))
-                {
-                    bool hasChildren = false;
-                    try
-                    {
-                        using (var enumerator = Directory.EnumerateFileSystemEntries(subFolder).GetEnumerator())
-                        {
-                            hasChildren = enumerator.MoveNext();
-                        }
-                    }
-                    catch
-                    {
-                        hasChildren = false;
-                    }
-
-                    items.Add(new FolderItemInfo
-                    {
-                        Name = Path.GetFileName(subFolder),
-                        Path = subFolder,
-                        IsFolder = true,
-                        HasChildren = hasChildren,
-                        Icon = _folderBitmap
-                    });
-                }
-            }
-            catch
-            {
-                // Ignore directory enumeration issues.
-            }
-
-            try
-            {
-                foreach (var file in Directory.EnumerateFiles(folderPath))
-                {
-                    items.Add(new FolderItemInfo
-                    {
-                        Name = Path.GetFileName(file),
-                        Path = file,
-                        IsFolder = false,
-                        HasChildren = false,
-                        Icon = GetIconBitmap(file)
-                    });
-                }
-            }
-            catch
-            {
-                // Ignore file enumeration issues.
-            }
-
-            items.Sort((x, y) =>
-            {
-                int typeCompare = y.IsFolder.CompareTo(x.IsFolder);
-                if (typeCompare != 0)
-                {
-                    return typeCompare;
-                }
-
-                return string.Compare(x.Name, y.Name, StringComparison.CurrentCultureIgnoreCase);
-            });
-
-            return items;
-        }
-
-        private Bitmap GetIconBitmap(string filePath)
-        {
-            if (string.IsNullOrEmpty(filePath))
-            {
-                return _defaultFileBitmap;
-            }
-
-            string extension = Path.GetExtension(filePath) ?? string.Empty;
-            bool useFullPath = extension.Equals(".exe", StringComparison.OrdinalIgnoreCase) || extension.Equals(".lnk", StringComparison.OrdinalIgnoreCase);
-            string cacheKey = useFullPath ? filePath : extension;
-
-            return _iconCache.GetOrAdd(cacheKey, key =>
-            {
-                try
-                {
-                    if (File.Exists(filePath))
-                    {
-                        using (var icon = Icon.ExtractAssociatedIcon(filePath))
-                        {
-                            if (icon != null)
-                            {
-                                var bitmap = icon.ToBitmap();
-                                if (bitmap != null)
-                                {
-                                    return bitmap;
-                                }
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore icon extraction errors.
-                }
-
-                return _defaultFileBitmap;
-            });
         }
 
         private void RunProgram(string programPath)
@@ -619,37 +623,33 @@ namespace QuickLaunchOnTray
 
         protected override void ExitThreadCore()
         {
+            var warmupTimer = _warmupTimer;
+            _warmupTimer = null;
+            if (warmupTimer != null)
+            {
+                warmupTimer.Dispose();
+            }
+
             foreach (var icon in _trayIcons)
             {
+                var menu = icon.ContextMenuStrip;
                 icon.Visible = false;
+                icon.ContextMenuStrip = null;
                 icon.Dispose();
+                if (menu != null)
+                {
+                    menu.Dispose();
+                }
             }
             _trayIcons.Clear();
 
-            var disposedBitmaps = new HashSet<Bitmap>();
-            foreach (var bitmap in _iconCache.Values)
-            {
-                if (bitmap == null)
-                {
-                    continue;
-                }
-
-                if (ReferenceEquals(bitmap, _defaultFileBitmap) || ReferenceEquals(bitmap, _folderBitmap))
-                {
-                    continue;
-                }
-
-                if (disposedBitmaps.Add(bitmap))
-                {
-                    bitmap.Dispose();
-                }
-            }
-            _iconCache.Clear();
-            _folderCache.Clear();
+            _folderIndexCache.Dispose();
+            _iconImages.Dispose();
 
             _folderBitmap?.Dispose();
             _defaultFileBitmap?.Dispose();
             _folderIcon?.Dispose();
+            _defaultFileIcon?.Dispose();
             _hiddenForm?.Dispose();
 
             base.ExitThreadCore();
@@ -668,22 +668,6 @@ namespace QuickLaunchOnTray
             }
 
             base.Dispose(disposing);
-        }
-        
-
-        private class FolderItemInfo
-        {
-            public string Name { get; set; }
-            public string Path { get; set; }
-            public bool IsFolder { get; set; }
-            public bool HasChildren { get; set; }
-            public Bitmap Icon { get; set; }
-        }
-
-        private class FolderCacheEntry
-        {
-            public DateTime CachedAt { get; set; }
-            public IReadOnlyList<FolderItemInfo> Items { get; set; }
         }
 
         private class FolderMenuMetadata

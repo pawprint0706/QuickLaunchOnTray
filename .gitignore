@@ -240,3 +240,6 @@ ModelManifest.xml
 
 # FAKE - F# Make
 .fake/
+
+# QuickLaunchOnTray: 로컬 실행 설정(경로/이름은 개인 환경 정보)
+config.ini

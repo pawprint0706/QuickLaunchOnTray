@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -46,7 +46,7 @@
     
     mimetype: application/x-microsoft.net.object.binary.base64
     value   : The object must be serialized with 
-            : System.Serialization.Formatters.Binary.BinaryFormatter
+            : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
             : and then encoded with base64 encoding.
     
     mimetype: application/x-microsoft.net.object.soap.base64
@@ -60,6 +60,7 @@
             : and then encoded with base64 encoding.
     -->
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
     <xsd:element name="root" msdata:IsDataSet="true">
       <xsd:complexType>
         <xsd:choice maxOccurs="unbounded">
@@ -68,9 +69,10 @@
               <xsd:sequence>
                 <xsd:element name="value" type="xsd:string" minOccurs="0" />
               </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" />
+              <xsd:attribute name="name" use="required" type="xsd:string" />
               <xsd:attribute name="type" type="xsd:string" />
               <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
             </xsd:complexType>
           </xsd:element>
           <xsd:element name="assembly">
@@ -85,9 +87,10 @@
                 <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
                 <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
               </xsd:sequence>
-              <xsd:attribute name="name" type="xsd:string" msdata:Ordinal="1" />
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
               <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
               <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
             </xsd:complexType>
           </xsd:element>
           <xsd:element name="resheader">
@@ -109,9 +112,81 @@
     <value>2.0</value>
   </resheader>
   <resheader name="reader">
-    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <resheader name="writer">
-    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="ConfigFileNotFound" xml:space="preserve">
+    <value>'config.ini' 파일을 찾을 수 없습니다: {0}</value>
+  </data>
+  <data name="ConfigReadError" xml:space="preserve">
+    <value>설정 파일을 읽는 중 오류가 발생했습니다.</value>
+  </data>
+  <data name="NoProgramsSection" xml:space="preserve">
+    <value>'config.ini' 파일에 [Programs] 섹션이 없습니다.</value>
+  </data>
+  <data name="NoProgramInfo" xml:space="preserve">
+    <value>'config.ini' 파일에 유효한 항목이 없습니다.</value>
+  </data>
+  <data name="ConfigEntrySkipped" xml:space="preserve">
+    <value>{0}번째 줄을 건너뛰었습니다: {1}</value>
+  </data>
+  <data name="EntryCreateSkipped" xml:space="preserve">
+    <value>'{0}' 항목을 등록하지 못했습니다: {1}</value>
+  </data>
+  <data name="EmptyPath" xml:space="preserve">
+    <value>경로가 비어있습니다.</value>
+  </data>
+  <data name="PathNotExist" xml:space="preserve">
+    <value>경로가 존재하지 않습니다: {0}</value>
+  </data>
+  <data name="Error" xml:space="preserve">
+    <value>오류</value>
+  </data>
+  <data name="Warning" xml:space="preserve">
+    <value>경고</value>
+  </data>
+  <data name="AlreadyRunning" xml:space="preserve">
+    <value>'QuickLaunchOnTray'가 이미 실행 중입니다. 알림 영역을 확인하세요.</value>
+  </data>
+  <data name="OpenFolder" xml:space="preserve">
+    <value>폴더 열기</value>
+  </data>
+  <data name="RunProgram" xml:space="preserve">
+    <value>프로그램 실행</value>
+  </data>
+  <data name="TerminateApp" xml:space="preserve">
+    <value>'QuickLaunchOnTray' 종료</value>
+  </data>
+  <data name="ConfirmTermination" xml:space="preserve">
+    <value>'QuickLaunchOnTray'를 종료하시겠습니까? 모든 빠른 실행 아이콘이 사라집니다.</value>
+  </data>
+  <data name="Confirm" xml:space="preserve">
+    <value>확인</value>
+  </data>
+  <data name="ProgramRunError" xml:space="preserve">
+    <value>프로그램 실행 중 오류가 발생했습니다: {0}</value>
+  </data>
+  <data name="ErrorShowingFolderMenu" xml:space="preserve">
+    <value>폴더 메뉴 표시 중 오류 발생: {0}</value>
+  </data>
+  <data name="ErrorBuildingFolderMenu" xml:space="preserve">
+    <value>폴더 메뉴 구성 중 오류 발생: {0}</value>
+  </data>
+  <data name="OpenInExplorer" xml:space="preserve">
+    <value>탐색기에서 열기</value>
+  </data>
+  <data name="Close" xml:space="preserve">
+    <value>닫기</value>
+  </data>
+  <data name="Loading" xml:space="preserve">
+    <value>불러오는 중...</value>
+  </data>
+  <data name="NoItemsAvailable" xml:space="preserve">
+    <value>표시할 항목이 없습니다</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>새로 고침</value>
+  </data>
 </root>
